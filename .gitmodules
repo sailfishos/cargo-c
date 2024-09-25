@@ -1,0 +1,3 @@
+[submodule "cargo-c"]
+	path = cargo-c
+	url = git@github.com:lu-zero/cargo-c.git
