@@ -12,6 +12,8 @@ BuildRequires:  rust-std-static§
 BuildRequires:  pkgconfig(openssl)
 BuildRequires:  cargo-packaging
 
+Patch1:         0001-Pin-versions-and-features-for-Rust-1.75.patch
+
 %description
 The is a cargo applet to build and install C-ABI compatibile dynamic and static
 libraries from Rust.
