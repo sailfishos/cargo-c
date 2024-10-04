@@ -1,2 +1,11 @@
+build/
 vendor/
-upstream/vendor/
+
+debugfiles.*
+debugsourcefiles.*
+debugsources.*
+debuglinks.*
+documentation.list
+elfbins.list
+
+RPMS/
