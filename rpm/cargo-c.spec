@@ -6,7 +6,7 @@ License:        MIT
 Group:          Development/Languages/Rust
 
 URL:            https://crates.io/crates/cargo-c
-Source0:        %{name}-%{version}.tar.zst
+Source0:        %{name}-%{version}.tar.xz
 Source1:        vendor.tar.zst
 Source2:        config.toml
 BuildRequires:  cargo >= 0.80.0
@@ -27,8 +27,7 @@ dynamic library, and a C header to be used by any C (and C-compatible)
 software.
 
 %prep
-%setup -n %{name}-%{version}/cargo-c
-rm -rf vendor
+%setup -n %{name}-%{version}/%{name}
 tar xf %{SOURCE1}
 install -D -m 644 %{SOURCE2} .cargo/config.toml
 %patch0 -p1
@@ -36,6 +35,15 @@ install -D -m 644 %{SOURCE2} .cargo/config.toml
 %patch2 -p1
 
 %build
+%ifarch %arm32
+%global sb2_target armv7-unknown-linux-gnueabihf
+%endif
+%ifarch %arm64
+%global sb2_target aarch64-unknown-linux-gnu
+%endif
+%ifarch %ix86
+%global sb2_target i686-unknown-linux-gnu
+%endif
 
 # https://git.sailfishos.org/mer-core/gecko-dev/blob/master/rpm/xulrunner-qt5.spec#L224
 # When cross-compiling under SB2 rust needs to know what arch to emit
@@ -43,38 +51,40 @@ install -D -m 644 %{SOURCE2} .cargo/config.toml
 # to "whatever rust was built as" but in SB2 rust is accelerated and
 # would produce x86 so this is how it knows differently. Not needed
 # for native x86 builds
+
 %ifarch %arm
-export SB2_RUST_TARGET_TRIPLE=armv7-unknown-linux-gnueabihf
-export CFLAGS_armv7_unknown_linux_gnueabihf=$CFLAGS
-export CXXFLAGS_armv7_unknown_linux_gnueabihf=$CXXFLAGS
+export CFLAGS_armv7_unknown_linux_gnueabihf="$CFLAGS -D_GCC_LIMITS_H_"
+export CXXFLAGS_armv7_unknown_linux_gnueabihf="$CXXFLAGS -D_GCC_LIMITS_H_"
 %endif
 %ifarch aarch64
-export SB2_RUST_TARGET_TRIPLE=aarch64-unknown-linux-gnu
-export CFLAGS_aarch64_unknown_linux_gnu=$CFLAGS
-export CXXFLAGS_aarch64_unknown_linux_gnu=$CXXFLAGS
+export CFLAGS_aarch64_unknown_linux_gnu="$CFLAGS -D_GCC_LIMITS_H_"
+export CXXFLAGS_aarch64_unknown_linux_gnu="$CXXFLAGS -D_GCC_LIMITS_H_"
 %endif
 %ifarch %ix86
-export SB2_RUST_TARGET_TRIPLE=i686-unknown-linux-gnu
 export CFLAGS_i686_unknown_linux_gnu=$CFLAGS
 export CXXFLAGS_i686_unknown_linux_gnu=$CXXFLAGS
 %endif
 
+export SB2_RUST_TARGET_TRIPLE=%{sb2_target}
+export RUST_HOST_TARGET=%{sb2_target}
+export RUST_TARGET=%{sb2_target}
+export TARGET=%{sb2_target}
+export HOST=%{sb2_target}
+
 export CFLAGS="-O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -fmessage-length=0"
 export CXXFLAGS=$CFLAGS
+
+%ifnarch %ix86
+# This should be define...
+export CROSS_COMPILE=%{sb2_target}
+
 # This avoids a malloc hang in sb2 gated calls to execvp/dup2/chdir
 # during fork/exec. It has no effect outside sb2 so doesn't hurt
 # native builds.
-# export SB2_RUST_EXECVP_SHIM="/usr/bin/env LD_PRELOAD=/usr/lib/libsb2/libsb2.so.1 /usr/bin/env"
-# export SB2_RUST_USE_REAL_EXECVP=Yes
-# export SB2_RUST_USE_REAL_FN=Yes
-# export SB2_RUST_NO_SPAWNVP=Yes
-
-%ifnarch %ix86
-export HOST_CC=host-cc
-export HOST_CXX=host-cxx
-export CC_i686_unknown_linux_gnu=$HOST_CC
-export CXX_i686_unknown_linux_gnu=$HOST_CXX
-%endif
+export SB2_RUST_EXECVP_SHIM="/usr/bin/env LD_PRELOAD=/usr/lib/libsb2/libsb2.so.1 /usr/bin/env"
+export SB2_RUST_USE_REAL_EXECVP=Yes
+export SB2_RUST_USE_REAL_FN=Yes
+export SB2_RUST_NO_SPAWNVP=Yes
 
 # Set meego cross compilers
 export PATH=/opt/cross/bin/:$PATH
@@ -90,22 +100,19 @@ export AR_aarch64_unknown_linux_gnu=aarch64-meego-linux-gnu-ar
 export PKG_CONFIG_ALLOW_CROSS_i686_unknown_linux_gnu=1
 export PKG_CONFIG_ALLOW_CROSS_armv7_unknown_linux_gnueabihf=1
 export PKG_CONFIG_ALLOW_CROSS_aarch64_unknown_linux_gnu=1
+%endif
 
-taskset 0x1 cargo auditable build --jobs 1 --offline --release --target $SB2_RUST_TARGET_TRIPLE
+%ifnarch %ix86
+export HOST_CC=host-cc
+export HOST_CXX=host-cxx
+export CC_i686_unknown_linux_gnu=$HOST_CC
+export CXX_i686_unknown_linux_gnu=$HOST_CXX
+%endif
+
+cargo auditable build --offline --release --jobs 1 --target %{sb2_target} --verbose
 
 %install
-
-%ifarch %arm
-export SB2_RUST_TARGET_TRIPLE=armv7-unknown-linux-gnueabihf
-%endif
-%ifarch aarch64
-export SB2_RUST_TARGET_TRIPLE=aarch64-unknown-linux-gnu
-%endif
-%ifarch %ix86
-export SB2_RUST_TARGET_TRIPLE=i686-unknown-linux-gnu
-%endif
-
-export TARGET=target/$SB2_RUST_TARGET_TRIPLE/release
+export TARGET=target/%{sb2_target}/release
 
 install -D ${TARGET}/cargo-capi %{buildroot}%{_bindir}/cargo-capi
 install ${TARGET}/cargo-cbuild %{buildroot}%{_bindir}/cargo-cbuild
